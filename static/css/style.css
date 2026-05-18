@@ -86,7 +86,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); min-
 .detail-btn { font-family: var(--sans); font-size: .7rem; font-weight: 700; text-transform: uppercase; background: var(--bg3); color: var(--accent); border: 1px solid var(--border2); padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: all .2s; }
 .detail-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
-/* MỚI: Vùng chứa các lưới so sánh */
 .step-grids-row { display: flex; gap: 16px; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
 .grid-label-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .grid-tag { font-size: .65rem; font-weight: 700; text-transform: uppercase; color: var(--text3); letter-spacing: .05em; background: var(--bg3); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
@@ -98,27 +97,30 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); min-
 
 .step-detail-wrapper { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; }
 .step-detail-wrapper.hidden { display: none; }
-.step-detail-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+
+/* MỚI: Bố cục table + sbox */
+.step-detail-flex { display: flex; gap: 20px; align-items: flex-start; overflow-x: auto; }
+.step-detail-table { font-size: .78rem; border-collapse: collapse; min-width: 300px; }
 .step-detail-table th, .step-detail-table td { padding: 6px 8px; border: 1px solid var(--border); text-align: center; }
 .step-detail-table th { background: var(--bg3); color: var(--text2); font-weight: 600; }
 .step-detail-table .highlight { color: var(--accent); font-weight: 700; background: #eff6ff; }
 
-.ks-result { margin-top: 20px; } .ks-row { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-.ks-idx { width: 28px; text-align: center; font-size: .72rem; color: var(--text3); font-weight:700; }
-.ks-hex { flex: 1; font-family: var(--mono); font-size: .82rem; color: var(--accent); word-break: break-all; }
-.ks-bar-wrap { width: 140px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.ks-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; }
+/* MỚI: S-Box 16x16 Grid */
+.sbox-grid-container { border: 1px solid var(--border); border-radius: var(--radius2); overflow: hidden; background: var(--bg2); }
+.sbox-table { display: grid; grid-template-columns: repeat(17, 1fr); }
+.sbox-header { background: var(--bg3); color: var(--text2); font-family: var(--mono); font-size: .6rem; font-weight: 700; padding: 4px 2px; text-align: center; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.sbox-cell { color: var(--text); font-family: var(--mono); font-size: .6rem; padding: 3px 1px; text-align: center; border-right: 1px solid #f3f4f6; border-bottom: 1px solid #f3f4f6; transition: all .1s; }
+.sbox-highlight { background: #dbeafe; color: var(--accent); font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--accent); }
 
-.about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-.about-card h3 { font-size: .95rem; font-weight: 700; color: var(--accent); margin-bottom: 14px; }
-.about-card p, .about-card li { font-size: .88rem; color: var(--text2); line-height: 1.75; } .about-card ul { padding-left: 18px; }
-.mode-table { width: 100%; border-collapse: collapse; font-size: .83rem; margin-top: 4px; }
-.mode-table th, .mode-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
-.mode-table th { color: var(--text3); font-size: .72rem; text-transform: uppercase; background: var(--bg3); }
-.good { color: var(--accent2); font-weight: 600; } .bad  { color: var(--danger); font-weight: 600; }
-.key-info-grid { display: flex; gap: 12px; margin-top: 8px; }
-.key-info-item { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius2); padding: 16px 10px; text-align: center; }
-.ki-bits { display: block; font-size: 1.5rem; font-weight: 800; color: var(--accent); } .ki-label { display: block; font-size: .7rem; color: var(--text3); text-transform: uppercase; } .ki-rounds { display: block; font-size: .8rem; color: var(--text2); margin-top: 6px; }
+/* MỚI: Key Schedule Steps */
+.ks-step { margin-bottom: 12px; padding: 10px; background: var(--bg3); border-radius: var(--radius2); border-left: 3px solid var(--accent); }
+.ks-step:last-child { margin-bottom: 0; }
+.ks-step-title { font-size: .75rem; font-weight: 700; color: var(--accent); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .03em; }
+.ks-step-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-family: var(--mono); font-size: .72rem; color: var(--text2); margin-bottom: 2px; }
+.ks-label { font-weight: 600; color: var(--text3); min-width: 80px; }
+.ks-val { background: var(--bg2); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border); letter-spacing: .03em; }
+.ks-val.highlight { background: #eff6ff; color: var(--accent); border-color: #bfdbfe; font-weight: 700; }
+.ks-op { font-weight: 800; color: var(--accent); padding: 0 4px; }
 
 .toast { position: fixed; bottom: 28px; right: 28px; z-index: 999; background: var(--text); color: #fff; padding: 12px 20px; border-radius: var(--radius2); font-size: .85rem; font-weight: 600; box-shadow: var(--shadow-md); transition: all .3s; }
 .toast.hidden { opacity: 0; transform: translateY(12px); pointer-events: none; }

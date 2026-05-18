@@ -10,7 +10,7 @@ from aes_matma import (
     sub_bytes, inv_sub_bytes, shift_rows, inv_shift_rows,
     mix_columns, inv_mix_columns, add_round_key,
     ecb_encrypt, ecb_decrypt, cbc_encrypt, cbc_decrypt,
-    generate_random_key, generate_random_iv,
+    generate_random_key, generate_random_iv, SBOX, RCON
 )
 
 app = Flask(__name__)
@@ -35,6 +35,65 @@ def api_random_iv():
     iv = generate_random_iv()
     return jsonify({'hex': iv.hex().upper(), 'bytes': list(iv)})
 
+# ─────────────────────────────────────────────
+#  VERBOSE KEY EXPANSION (MỚI)
+# ─────────────────────────────────────────────
+def _verbose_key_expansion(key: bytes) -> dict:
+    Nk = len(key) // 4
+    Nr = Nk + 6
+    w = [list(key[i:i+4]) for i in range(0, len(key), 4)]
+    steps = []
+
+    for i in range(Nk, 4 * (Nr + 1)):
+        step_info = {'i': i, 'Nk': Nk}
+        temp = w[i - 1][:]
+        step_info['w_im1'] = w[i-1][:]
+        step_info['w_iNk'] = w[i-Nk][:]
+
+        if i % Nk == 0:
+            # RotWord
+            rotated = temp[1:] + temp[:1]
+            step_info['rotated'] = rotated[:]
+            # SubWord
+            subbed = [SBOX[b] for b in rotated]
+            step_info['subbed'] = subbed[:]
+            # Rcon
+            rcon_val = [RCON[i // Nk], 0, 0, 0]
+            step_info['rcon'] = rcon_val
+            # XOR Rcon
+            xored_rcon = [s ^ r for s, r in zip(subbed, rcon_val)]
+            step_info['xored_rcon'] = xored_rcon
+            # Final XOR
+            final = [w[i - Nk][j] ^ xored_rcon[j] for j in range(4)]
+            step_info['type'] = 'rcon'
+        elif Nk > 6 and i % Nk == 4:
+            subbed = [SBOX[b] for b in temp]
+            step_info['subbed'] = subbed[:]
+            final = [w[i - Nk][j] ^ subbed[j] for j in range(4)]
+            step_info['type'] = 'sub'
+        else:
+            final = [w[i - Nk][j] ^ temp[j] for j in range(4)]
+            step_info['type'] = 'simple'
+
+        step_info['result'] = final
+        w.append(final)
+        steps.append(step_info)
+
+    # Gom thành Round Keys
+    round_keys = [sum(w[i:i+4], []) for i in range(0, 4 * (Nr + 1), 4)]
+    
+    return {
+        'key_bits': len(key) * 8,
+        'Nr': Nr,
+        'Nk': Nk,
+        'steps': steps,
+        'round_keys': [{'round': i, 'hex': bytes(rk).hex().upper(), 'bytes': rk} for i, rk in enumerate(round_keys)]
+    }
+
+# ─────────────────────────────────────────────
+#  COLLECT STEPS ENCRYPT/DECRYPT (Giữ nguyên)
+# ─────────────────────────────────────────────
+
 def _collect_encrypt_steps(plaintext_block: bytes, key: bytes) -> dict:
     round_keys = key_expansion(key)
     Nr = len(round_keys) - 1
@@ -48,7 +107,6 @@ def _collect_encrypt_steps(plaintext_block: bytes, key: bytes) -> dict:
 
     for r in range(1, Nr):
         steps = []
-        
         old_state = state[:]
         state = sub_bytes(state)
         details = [{"pos": i, "in": old_state[i], "out": state[i]} for i in range(16)]
@@ -106,8 +164,7 @@ def _collect_decrypt_steps(ciphertext_block: bytes, key: bytes) -> dict:
     state = list(ciphertext_block)
     rounds = []
 
-    old_state = state[:]
-    state = add_round_key(state, round_keys[Nr])
+    old_state = state[:]; state = add_round_key(state, round_keys[Nr])
     details = [{"pos": i, "state": old_state[i], "key": round_keys[Nr][i], "result": state[i]} for i in range(16)]
     rounds.append({'round': Nr, 'label': f'Initial AddRoundKey (RK{Nr})', 'steps': [{'name': 'AddRoundKey', 'state': state[:], 'old_state': old_state[:], 'key': round_keys[Nr][:], 'details': details}]})
 
@@ -115,13 +172,10 @@ def _collect_decrypt_steps(ciphertext_block: bytes, key: bytes) -> dict:
         steps = []
         old_state = state[:]; state = inv_shift_rows(state); details = [{"row": i, "shift": i, "desc": f"Dịch phải {i}", "before": [], "after": []} for i in range(4)]
         steps.append({'name': 'InvShiftRows', 'state': state[:], 'old_state': old_state[:], 'details': details})
-
         old_state = state[:]; state = inv_sub_bytes(state); details = [{"pos": i, "in": old_state[i], "out": state[i]} for i in range(16)]
         steps.append({'name': 'InvSubBytes', 'state': state[:], 'old_state': old_state[:], 'details': details})
-
         old_state = state[:]; state = add_round_key(state, round_keys[r]); details = [{"pos": i, "state": old_state[i], "key": round_keys[r][i], "result": state[i]} for i in range(16)]
         steps.append({'name': 'AddRoundKey', 'state': state[:], 'old_state': old_state[:], 'key': round_keys[r][:], 'details': details})
-
         old_state = state[:]; state = inv_mix_columns(state); details = [{"col": i, "input": old_state[i*4:(i+1)*4], "output": state[i*4:(i+1)*4]} for i in range(4)]
         steps.append({'name': 'InvMixColumns', 'state': state[:], 'old_state': old_state[:], 'details': details})
         rounds.append({'round': r, 'label': f'Round {r} (inverse)', 'steps': steps})
@@ -129,14 +183,11 @@ def _collect_decrypt_steps(ciphertext_block: bytes, key: bytes) -> dict:
     steps = []
     old_state = state[:]; state = inv_shift_rows(state); details = [{"row": i, "shift": i, "desc": f"Dịch phải {i}", "before": [], "after": []} for i in range(4)]
     steps.append({'name': 'InvShiftRows', 'state': state[:], 'old_state': old_state[:], 'details': details})
-
     old_state = state[:]; state = inv_sub_bytes(state); details = [{"pos": i, "in": old_state[i], "out": state[i]} for i in range(16)]
     steps.append({'name': 'InvSubBytes', 'state': state[:], 'old_state': old_state[:], 'details': details})
-
     old_state = state[:]; state = add_round_key(state, round_keys[0]); details = [{"pos": i, "state": old_state[i], "key": round_keys[0][i], "result": state[i]} for i in range(16)]
     steps.append({'name': 'AddRoundKey', 'state': state[:], 'old_state': old_state[:], 'key': round_keys[0][:], 'details': details})
     rounds.append({'round': 0, 'label': 'Final Round 0 (inverse)', 'steps': steps})
-
     return {'Nr': Nr, 'key_bits': len(key) * 8, 'ciphertext': list(ciphertext_block), 'plaintext': state, 'round_keys': [rk[:] for rk in round_keys], 'rounds': rounds}
 
 def _parse_hex_field(value: str, name: str, expected_len: int = None) -> bytes:
@@ -189,8 +240,8 @@ def api_key_schedule():
     data = request.get_json(force=True)
     try:
         key_ascii = data.get('key_ascii', ''); key_bits = int(data.get('key_bits', 128)); key = _pad_ascii_to_length(key_ascii, key_bits // 8)
-        rks = key_expansion(key)
-        return jsonify({'key_bits': len(key) * 8, 'Nr': len(rks) - 1, 'round_keys': [{'round': i, 'hex': bytes(rk).hex().upper(), 'bytes': rk} for i, rk in enumerate(rks)]})
+        # Gọi hàm verbose mới
+        return jsonify(_verbose_key_expansion(key))
     except Exception as e: return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
