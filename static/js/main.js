@@ -1,20 +1,13 @@
 /**
- * main.js — Frontend logic cho AES Visualizer
- *
- * Cac chuc nang chinh:
- *  - Xu ly tab navigation
- *  - Goi API Flask de ma hoa / giai ma / key schedule
- *  - Render verbose (hien thi tung vong AES voi state 4x4)
- *  - Sinh khoa / IV / Nonce ngau nhien
+ * main.js — Frontend logic cho AES Visualizer (Đã bỏ CTR, thêm Key/IV ASCII)
  */
 
 'use strict';
 
 // ─────────────────────────────────────────────────
-//  TIEN ICH CHUNG (UTILITIES)
+//  TIEN ICH CHUNG
 // ─────────────────────────────────────────────────
 
-/** Hien thi toast ngan gon o goc man hinh */
 function showToast(msg, duration = 2000) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -23,33 +16,27 @@ function showToast(msg, duration = 2000) {
   t._timer = setTimeout(() => t.classList.add('hidden'), duration);
 }
 
-/** Copy noi dung mot element vao clipboard */
 function copyText(id) {
   const el = document.getElementById(id);
   if (!el) return;
   navigator.clipboard.writeText(el.textContent).then(() => showToast('Đã sao chép!'));
 }
 
-/** Hien thi/an element theo id */
 function show(id)   { const e = document.getElementById(id); if (e) e.classList.remove('hidden'); }
 function hide(id)   { const e = document.getElementById(id); if (e) e.classList.add('hidden');    }
 function toggle(id, visible) { visible ? show(id) : hide(id); }
 
-/** Lay gia tri input theo id, trim khoang trang */
 function val(id)    { return document.getElementById(id)?.value.trim() || ''; }
 
-/** Chuyen chuoi ASCII thanh HEX (cho API dung HEX lam chuan) */
 function asciiToHex(str) {
   return Array.from(str).map(c => c.charCodeAt(0).toString(16).padStart(2,'0')).join('');
 }
 
-/** Chuyen Base64 thanh HEX (cho API giai ma) */
 function b64ToHex(b64) {
   const bin = atob(b64);
   return Array.from(bin).map(c => c.charCodeAt(0).toString(16).padStart(2,'0')).join('');
 }
 
-/** Hien thi thong bao loi trong card */
 function showError(containerId, msg) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -57,7 +44,7 @@ function showError(containerId, msg) {
   if (!errEl) {
     errEl = document.createElement('div');
     errEl.className = 'error-banner';
-    container.appendChild(errEl);
+    container.prepend(errEl);
   }
   errEl.textContent = '⚠ ' + msg;
   errEl.style.display = 'block';
@@ -83,11 +70,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ─────────────────────────────────────────────────
-//  CHON CHE DO (MODE BUTTONS)
+//  CHON CHE DO (ECB / CBC)
 // ─────────────────────────────────────────────────
 
-/** Ket noi cac nut mode trong mot container, xu ly hien/an IV/Nonce */
-function initModeTabs(containerSel, ivRowId, nonceRowId, warnId) {
+function initModeTabs(containerSel, ivRowId, warnId) {
   const container = document.querySelector(containerSel);
   if (!container) return;
 
@@ -96,63 +82,40 @@ function initModeTabs(containerSel, ivRowId, nonceRowId, warnId) {
       container.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const mode = btn.dataset.mode;
-      toggle(ivRowId,    mode === 'CBC');
-      toggle(nonceRowId, mode === 'CTR');
+      toggle(ivRowId, mode === 'CBC');
       if (warnId) toggle(warnId, mode === 'ECB');
     });
   });
 }
 
-initModeTabs('#tab-encrypt .mode-tabs', 'enc-iv-row',  'enc-nonce-row', 'ecb-warn');
-initModeTabs('#dec-mode-tabs',           'dec-iv-row',  'dec-nonce-row', null);
+initModeTabs('#tab-encrypt .mode-tabs', 'enc-iv-row', 'ecb-warn');
+initModeTabs('#dec-mode-tabs', 'dec-iv-row', null);
 
-/** Lay mode dang active trong mot container */
 function getActiveMode(containerSel) {
   return document.querySelector(`${containerSel} .mode-btn.active`)?.dataset.mode || 'ECB';
 }
 
 // ─────────────────────────────────────────────────
-//  SINH NGAU NHIEN (RANDOM KEY / IV / NONCE)
+//  SINH NGAU NHIEN (KEY ASCII)
 // ─────────────────────────────────────────────────
 
-/** Sinh khoa ngau nhien va dien vao input */
 async function genKey(inputId, bitsSelectId) {
   const bits = parseInt(document.getElementById(bitsSelectId)?.value || '128');
-  try {
-    const res = await fetch(`/api/random/key?bits=${bits}`);
-    const data = await res.json();
-    document.getElementById(inputId).value = data.hex;
-    showToast(`Đã sinh khóa ${bits}-bit!`);
-  } catch { showToast('Lỗi khi sinh khóa', 1500); }
-}
-
-/** Sinh IV ngau nhien va dien vao input */
-async function genIV(inputId) {
-  try {
-    const res = await fetch('/api/random/iv');
-    const data = await res.json();
-    document.getElementById(inputId).value = data.hex;
-    showToast('Đã sinh IV ngẫu nhiên!');
-  } catch { showToast('Lỗi khi sinh IV', 1500); }
-}
-
-/** Sinh Nonce ngau nhien va dien vao input */
-async function genNonce(inputId) {
-  try {
-    const res = await fetch('/api/random/nonce');
-    const data = await res.json();
-    document.getElementById(inputId).value = data.hex;
-    showToast('Đã sinh Nonce ngẫu nhiên!');
-  } catch { showToast('Lỗi khi sinh Nonce', 1500); }
+  const len = bits / 8; // 16, 24, 32 ký tự
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < len; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  document.getElementById(inputId).value = result;
+  showToast(`Đã sinh khóa ${bits}-bit (ASCII)!`);
 }
 
 // ─────────────────────────────────────────────────
-//  RENDER VERBOSE — STATE GRID 4x4
+//  RENDER VERBOSE
 // ─────────────────────────────────────────────────
 
-/** Tao HTML cho luoi trang thai 4x4 (16 byte -> state AES) */
 function renderStateGrid(stateArr) {
-  // stateArr: mang 16 phan tu, luu theo cot (column-major)
   const grid = document.createElement('div');
   grid.className = 'state-grid';
   for (let i = 0; i < 16; i++) {
@@ -164,7 +127,6 @@ function renderStateGrid(stateArr) {
   return grid;
 }
 
-/** Map ten buoc sang class CSS de to mau */
 const STEP_CLASS = {
   'SubBytes'     : 'step-sb',
   'InvSubBytes'  : 'step-sb',
@@ -175,7 +137,6 @@ const STEP_CLASS = {
   'AddRoundKey'  : 'step-ark',
 };
 
-/** Render mot buoc (SubBytes / ShiftRows / ...) trong mot vong */
 function renderStep(stepData) {
   const div = document.createElement('div');
   div.className = `step ${STEP_CLASS[stepData.name] || ''}`;
@@ -186,20 +147,16 @@ function renderStep(stepData) {
   div.appendChild(label);
   div.appendChild(renderStateGrid(stepData.state));
 
-  // Neu la AddRoundKey, hien them round key duoc dung
   if (stepData.name === 'AddRoundKey' && stepData.key) {
     const keyLine = document.createElement('div');
     keyLine.style.cssText = 'font-family:var(--mono);font-size:.68rem;color:var(--text3);margin-top:6px;';
-    keyLine.textContent = 'RK: ' + stepData.key.map(b =>
-      b.toString(16).toUpperCase().padStart(2,'0')).join(' ');
+    keyLine.textContent = 'RK: ' + stepData.key.map(b => b.toString(16).toUpperCase().padStart(2,'0')).join(' ');
     div.appendChild(keyLine);
   }
   return div;
 }
 
-/** Render toan bo phan verbose (round keys bar + cac vong) */
 function renderVerbose(verboseData, keysBarId, roundsId, metaId) {
-  // Meta info
   const metaEl = document.getElementById(metaId);
   if (metaEl) {
     metaEl.textContent =
@@ -207,7 +164,6 @@ function renderVerbose(verboseData, keysBarId, roundsId, metaId) {
       `PT: ${verboseData.plaintext?.map(b=>b.toString(16).toUpperCase().padStart(2,'0')).join(' ')}`;
   }
 
-  // Round keys bar
   const keysBar = document.getElementById(keysBarId);
   if (keysBar) {
     keysBar.innerHTML = '<span style="font-size:.72rem;color:var(--text3);margin-right:8px">RKs:</span>';
@@ -220,7 +176,6 @@ function renderVerbose(verboseData, keysBarId, roundsId, metaId) {
     });
   }
 
-  // Cac vong
   const container = document.getElementById(roundsId);
   if (!container) return;
   container.innerHTML = '';
@@ -229,7 +184,6 @@ function renderVerbose(verboseData, keysBarId, roundsId, metaId) {
     const block = document.createElement('div');
     block.className = 'round-block' + (idx === 0 ? ' open' : '');
 
-    // Header cua vong
     const header = document.createElement('div');
     header.className = 'round-header';
     header.innerHTML = `
@@ -239,7 +193,6 @@ function renderVerbose(verboseData, keysBarId, roundsId, metaId) {
     header.addEventListener('click', () => block.classList.toggle('open'));
     block.appendChild(header);
 
-    // Cac buoc trong vong
     const steps = document.createElement('div');
     steps.className = 'round-steps';
     round.steps.forEach(s => steps.appendChild(renderStep(s)));
@@ -254,32 +207,30 @@ function bytes2hex(arr) {
 }
 
 // ─────────────────────────────────────────────────
-//  MA HOA (ENCRYPT)
+//  MA HOA
 // ─────────────────────────────────────────────────
 
 async function doEncrypt() {
   clearError('tab-encrypt');
   const ptRaw    = val('enc-pt');
   const ptFmt    = val('enc-pt-fmt') || document.getElementById('enc-pt-fmt')?.value || 'ascii';
-  const keyHex   = val('enc-key');
+  const keyAscii = val('enc-key'); // Nhận ASCII
+  const keyBits  = document.getElementById('enc-key-bits')?.value || '128';
   const mode     = getActiveMode('#tab-encrypt .mode-tabs');
-  const ivHex    = val('enc-iv');
-  const nonceHex = val('enc-nonce');
+  const ivAscii  = val('enc-iv'); // Nhận ASCII hoặc trống
   const verbose  = document.getElementById('enc-verbose')?.checked;
 
   if (!ptRaw)   { showError('tab-encrypt', 'Vui lòng nhập Plaintext.'); return; }
-  if (!keyHex)  { showError('tab-encrypt', 'Vui lòng nhập hoặc sinh Key.'); return; }
+  if (!keyAscii)  { showError('tab-encrypt', 'Vui lòng nhập hoặc sinh Key.'); return; }
 
-  // Chuyen plaintext sang HEX
   let ptHex;
   try {
     ptHex = ptFmt === 'ascii' ? asciiToHex(ptRaw) : ptRaw.replace(/\s/g,'');
     if (!/^[0-9a-fA-F]*$/.test(ptHex)) throw new Error();
   } catch { showError('tab-encrypt', 'Plaintext HEX không hợp lệ.'); return; }
 
-  const body = { plaintext_hex: ptHex, key_hex: keyHex, mode, verbose };
-  if (mode === 'CBC') body.iv_hex    = ivHex;
-  if (mode === 'CTR') body.nonce_hex = nonceHex;
+  const body = { plaintext_hex: ptHex, key_ascii: keyAscii, key_bits: keyBits, mode, verbose };
+  if (mode === 'CBC') body.iv_ascii = ivAscii; // Gửi kèm IV (trống hoặc có)
 
   try {
     const res  = await fetch('/api/encrypt', {
@@ -291,9 +242,21 @@ async function doEncrypt() {
 
     document.getElementById('enc-out-hex').textContent = data.ciphertext_hex;
     document.getElementById('enc-out-b64').textContent = data.ciphertext_b64;
+    
+    // Hiển thị IV (nếu là CBC)
+    const ivRow = document.getElementById('enc-iv-result-row');
+    if (data.iv_hex) {
+      document.getElementById('enc-out-iv').textContent = data.iv_hex;
+      ivRow.style.display = 'flex';
+      if (data.iv_generated) {
+        showToast('⚠️ IV đã được tự sinh ngẫu nhiên! Hãy copy IV lại để giải mã.', 4000);
+      }
+    } else {
+      ivRow.style.display = 'none';
+    }
+
     show('enc-result-content'); hide('enc-result-empty');
 
-    // Verbose
     if (data.verbose) {
       show('verbose-section');
       renderVerbose(data.verbose, 'round-keys-bar', 'rounds-container', 'verbose-meta');
@@ -306,32 +269,40 @@ async function doEncrypt() {
 }
 
 // ─────────────────────────────────────────────────
-//  GIAI MA (DECRYPT)
+//  GIAI MA
 // ─────────────────────────────────────────────────
 
 async function doDecrypt() {
   clearError('tab-decrypt');
   const ctRaw    = val('dec-ct');
   const ctFmt    = document.getElementById('dec-ct-fmt')?.value || 'hex';
-  const keyHex   = val('dec-key');
+  const keyAscii = val('dec-key');
+  const keyBits  = document.getElementById('dec-key-bits')?.value || '128';
   const mode     = getActiveMode('#dec-mode-tabs');
-  const ivHex    = val('dec-iv');
-  const nonceHex = val('dec-nonce');
+  const ivRaw    = val('dec-iv'); // Chấp nhận Hex hoặc ASCII
   const verbose  = document.getElementById('dec-verbose')?.checked;
 
   if (!ctRaw)   { showError('tab-decrypt', 'Vui lòng nhập Ciphertext.'); return; }
-  if (!keyHex)  { showError('tab-decrypt', 'Vui lòng nhập Key.'); return; }
+  if (!keyAscii)  { showError('tab-decrypt', 'Vui lòng nhập Key.'); return; }
 
-  // Chuyen ciphertext sang HEX
   let ctHex;
   try {
     ctHex = ctFmt === 'base64' ? b64ToHex(ctRaw) : ctRaw.replace(/\s/g,'');
     if (!/^[0-9a-fA-F]*$/.test(ctHex)) throw new Error();
   } catch { showError('tab-decrypt', 'Ciphertext không hợp lệ.'); return; }
 
-  const body = { ciphertext_hex: ctHex, key_hex: keyHex, mode, verbose };
-  if (mode === 'CBC') body.iv_hex    = ivHex;
-  if (mode === 'CTR') body.nonce_hex = nonceHex;
+  const body = { ciphertext_hex: ctHex, key_ascii: keyAscii, key_bits: keyBits, mode, verbose };
+  
+  // Gửi IV giải mã: Backend tự nhận diện HEX hay ASCII
+  if (mode === 'CBC') {
+    if (!ivRaw) { showError('tab-decrypt', 'Chế độ CBC bắt buộc cần IV để giải mã.'); return; }
+    // Kiểm tra xem có phải là HEX không (từ lúc copy)
+    if (/^[0-9a-fA-F]{32}$/.test(ivRaw.replace(/\s/g,''))) {
+        body.iv_hex = ivRaw.replace(/\s/g,'');
+    } else {
+        body.iv_ascii = ivRaw;
+    }
+  }
 
   try {
     const res  = await fetch('/api/decrypt', {
@@ -361,13 +332,15 @@ async function doDecrypt() {
 // ─────────────────────────────────────────────────
 
 async function doKeySchedule() {
-  const keyHex = val('ks-key');
-  if (!keyHex) { showToast('Vui lòng nhập hoặc sinh Key trước!'); return; }
+  const keyAscii = val('ks-key');
+  const keyBits  = document.getElementById('ks-key-bits')?.value || '128';
+  
+  if (!keyAscii) { showToast('Vui lòng nhập hoặc sinh Key trước!'); return; }
 
   try {
     const res  = await fetch('/api/key_schedule', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ key_hex: keyHex })
+      body: JSON.stringify({ key_ascii: keyAscii, key_bits: keyBits })
     });
     const data = await res.json();
     if (data.error) { showToast('Lỗi: ' + data.error, 3000); return; }
@@ -382,8 +355,6 @@ async function doKeySchedule() {
     data.round_keys.forEach(rk => {
       const row = document.createElement('div');
       row.className = 'ks-row';
-
-      // Tinh "entropy bar" dua tren trung binh cac byte (chi de minh hoa)
       const avg = rk.bytes.reduce((a, b) => a + b, 0) / rk.bytes.length;
       const pct = Math.round((avg / 255) * 100);
 
@@ -403,11 +374,10 @@ async function doKeySchedule() {
 }
 
 // ─────────────────────────────────────────────────
-//  PHIM TAT (KEYBOARD SHORTCUTS)
+//  PHIM TAT & INIT
 // ─────────────────────────────────────────────────
 
 document.addEventListener('keydown', e => {
-  // Ctrl+Enter: thuc hien hanh dong chinh cua tab dang mo
   if (e.ctrlKey && e.key === 'Enter') {
     const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
     if (activeTab === 'encrypt')     doEncrypt();
@@ -416,28 +386,14 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ─────────────────────────────────────────────────
-//  KHOI TAO (INIT)
-// ─────────────────────────────────────────────────
-
-/** Sinh san key + IV mac dinh khi mo trang de trai nghiem nhanh */
 async function initDefaults() {
-  // Sinh key cho tab encrypt
-  const encKeyBits = document.getElementById('enc-key-bits');
-  if (encKeyBits) await genKey('enc-key', 'enc-key-bits');
-  await genIV('enc-iv');
-  await genNonce('enc-nonce');
-
-  // Copy key sang tab decrypt de tien cho nguoi dung thu nghiem
+  await genKey('enc-key', 'enc-key-bits');
   const encKey = val('enc-key');
   if (encKey) {
     const decKeyInput = document.getElementById('dec-key');
     if (decKeyInput) decKeyInput.value = encKey;
   }
-
-  // Sinh key cho key schedule tab
   if (document.getElementById('ks-key')) await genKey('ks-key', 'ks-key-bits');
 }
 
-// Chay sau khi DOM san sang
 document.addEventListener('DOMContentLoaded', initDefaults);
