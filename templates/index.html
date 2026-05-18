@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AES Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- ── HEADER ───────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">⬡</span>
+      <span class="logo-text">AES<em>viz</em></span>
+    </div>
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="encrypt">Mã Hóa</button>
+      <button class="tab-btn" data-tab="decrypt">Giải Mã</button>
+      <button class="tab-btn" data-tab="keyschedule">Key Schedule</button>
+      <button class="tab-btn" data-tab="about">Về AES</button>
+    </nav>
+  </div>
+</header>
+
+<main class="main-content">
+
+  <!-- ── TAB: MÃ HÓA ───────────────────────────────────── -->
+  <section id="tab-encrypt" class="tab-panel active">
+    <div class="panel-grid">
+
+      <!-- Form nhập liệu -->
+      <div class="card form-card">
+        <h2 class="card-title"><span class="icon">🔐</span> Thông Số Đầu Vào</h2>
+
+        <label class="field-label">Plaintext</label>
+        <div class="input-row">
+          <select id="enc-pt-fmt" class="select-sm">
+            <option value="ascii">ASCII</option>
+            <option value="hex">HEX</option>
+          </select>
+          <input id="enc-pt" class="field-input" placeholder="Nhập plaintext..."/>
+        </div>
+
+        <label class="field-label">Khóa (Key)</label>
+        <div class="input-row">
+          <select id="enc-key-bits" class="select-sm">
+            <option value="128">128-bit</option>
+            <option value="192">192-bit</option>
+            <option value="256">256-bit</option>
+          </select>
+          <input id="enc-key" class="field-input mono" placeholder="Hex key..."/>
+          <button class="btn-icon" title="Sinh ngẫu nhiên" onclick="genKey('enc-key','enc-key-bits')">⟳</button>
+        </div>
+
+        <label class="field-label">Chế Độ</label>
+        <div class="mode-tabs">
+          <button class="mode-btn active" data-mode="ECB">ECB</button>
+          <button class="mode-btn" data-mode="CBC">CBC</button>
+          <button class="mode-btn" data-mode="CTR">CTR</button>
+        </div>
+        <div class="mode-warning" id="ecb-warn">
+          ⚠️ ECB không an toàn cho dữ liệu thực tế!
+        </div>
+
+        <div id="enc-iv-row" class="param-row hidden">
+          <label class="field-label">IV (CBC — 16 byte)</label>
+          <div class="input-row">
+            <input id="enc-iv" class="field-input mono" placeholder="Hex IV..."/>
+            <button class="btn-icon" onclick="genIV('enc-iv')">⟳</button>
+          </div>
+        </div>
+
+        <div id="enc-nonce-row" class="param-row hidden">
+          <label class="field-label">Nonce (CTR — 8 byte)</label>
+          <div class="input-row">
+            <input id="enc-nonce" class="field-input mono" placeholder="Hex Nonce..."/>
+            <button class="btn-icon" onclick="genNonce('enc-nonce')">⟳</button>
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="enc-verbose" checked/>
+          <label for="enc-verbose">Hiển thị từng vòng chi tiết (≤ 16 byte)</label>
+        </div>
+
+        <button class="btn-primary" onclick="doEncrypt()">
+          <span>Mã Hóa</span> <span class="arrow">→</span>
+        </button>
+      </div>
+
+      <!-- Kết quả -->
+      <div class="card result-card" id="enc-result-card">
+        <h2 class="card-title"><span class="icon">📤</span> Kết Quả</h2>
+        <div id="enc-result-empty" class="empty-state">
+          Nhập dữ liệu và nhấn <strong>Mã Hóa</strong>
+        </div>
+        <div id="enc-result-content" class="hidden">
+          <div class="result-row">
+            <span class="result-label">HEX</span>
+            <span class="result-value mono" id="enc-out-hex"></span>
+            <button class="copy-btn" onclick="copyText('enc-out-hex')">⎘</button>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Base64</span>
+            <span class="result-value mono" id="enc-out-b64"></span>
+            <button class="copy-btn" onclick="copyText('enc-out-b64')">⎘</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Verbose rounds viewer -->
+    <div id="verbose-section" class="verbose-section hidden">
+      <div class="verbose-header">
+        <h2>⬡ Chi Tiết Từng Vòng AES</h2>
+        <div class="verbose-meta" id="verbose-meta"></div>
+      </div>
+      <div id="round-keys-bar" class="round-keys-bar"></div>
+      <div id="rounds-container" class="rounds-container"></div>
+    </div>
+  </section>
+
+  <!-- ── TAB: GIẢI MÃ ──────────────────────────────────── -->
+  <section id="tab-decrypt" class="tab-panel hidden">
+    <div class="panel-grid">
+      <div class="card form-card">
+        <h2 class="card-title"><span class="icon">🔓</span> Thông Số Đầu Vào</h2>
+
+        <label class="field-label">Ciphertext</label>
+        <div class="input-row">
+          <select id="dec-ct-fmt" class="select-sm">
+            <option value="hex">HEX</option>
+            <option value="base64">Base64</option>
+          </select>
+          <input id="dec-ct" class="field-input mono" placeholder="Nhập ciphertext..."/>
+        </div>
+
+        <label class="field-label">Khóa (Key)</label>
+        <div class="input-row">
+          <select id="dec-key-bits" class="select-sm">
+            <option value="128">128-bit</option>
+            <option value="192">192-bit</option>
+            <option value="256">256-bit</option>
+          </select>
+          <input id="dec-key" class="field-input mono" placeholder="Hex key..."/>
+          <button class="btn-icon" onclick="genKey('dec-key','dec-key-bits')">⟳</button>
+        </div>
+
+        <label class="field-label">Chế Độ</label>
+        <div class="mode-tabs" id="dec-mode-tabs">
+          <button class="mode-btn active" data-mode="ECB">ECB</button>
+          <button class="mode-btn" data-mode="CBC">CBC</button>
+          <button class="mode-btn" data-mode="CTR">CTR</button>
+        </div>
+
+        <div id="dec-iv-row" class="param-row hidden">
+          <label class="field-label">IV (CBC)</label>
+          <input id="dec-iv" class="field-input mono" placeholder="Hex IV..."/>
+        </div>
+
+        <div id="dec-nonce-row" class="param-row hidden">
+          <label class="field-label">Nonce (CTR)</label>
+          <input id="dec-nonce" class="field-input mono" placeholder="Hex Nonce..."/>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="dec-verbose" checked/>
+          <label for="dec-verbose">Hiển thị từng vòng chi tiết (1 khối)</label>
+        </div>
+
+        <button class="btn-primary" onclick="doDecrypt()">
+          <span>Giải Mã</span> <span class="arrow">→</span>
+        </button>
+      </div>
+
+      <div class="card result-card">
+        <h2 class="card-title"><span class="icon">📥</span> Kết Quả</h2>
+        <div id="dec-result-empty" class="empty-state">Nhập dữ liệu và nhấn <strong>Giải Mã</strong></div>
+        <div id="dec-result-content" class="hidden">
+          <div class="result-row">
+            <span class="result-label">ASCII</span>
+            <span class="result-value" id="dec-out-ascii"></span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">HEX</span>
+            <span class="result-value mono" id="dec-out-hex"></span>
+            <button class="copy-btn" onclick="copyText('dec-out-hex')">⎘</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="dec-verbose-section" class="verbose-section hidden">
+      <div class="verbose-header">
+        <h2>⬡ Chi Tiết Từng Vòng Giải Mã</h2>
+        <div class="verbose-meta" id="dec-verbose-meta"></div>
+      </div>
+      <div id="dec-round-keys-bar" class="round-keys-bar"></div>
+      <div id="dec-rounds-container" class="rounds-container"></div>
+    </div>
+  </section>
+
+  <!-- ── TAB: KEY SCHEDULE ─────────────────────────────── -->
+  <section id="tab-keyschedule" class="tab-panel hidden">
+    <div class="card" style="max-width:720px;margin:0 auto">
+      <h2 class="card-title"><span class="icon">🗝️</span> Key Schedule — Sinh Round Keys</h2>
+      <p class="card-desc">Xem tất cả các round key được sinh từ khóa gốc qua quá trình Key Expansion.</p>
+      <div class="input-row">
+        <select id="ks-key-bits" class="select-sm">
+          <option value="128">128-bit</option>
+          <option value="192">192-bit</option>
+          <option value="256">256-bit</option>
+        </select>
+        <input id="ks-key" class="field-input mono" placeholder="Hex key..."/>
+        <button class="btn-icon" onclick="genKey('ks-key','ks-key-bits')">⟳</button>
+        <button class="btn-primary sm" onclick="doKeySchedule()">Xem</button>
+      </div>
+      <div id="ks-result" class="ks-result hidden"></div>
+    </div>
+  </section>
+
+  <!-- ── TAB: ABOUT ────────────────────────────────────── -->
+  <section id="tab-about" class="tab-panel hidden">
+    <div class="about-grid">
+      <div class="card about-card">
+        <h3>⬡ AES là gì?</h3>
+        <p>Advanced Encryption Standard (AES) là thuật toán mã hóa khối đối xứng được NIST chuẩn hóa năm 2001, thay thế DES. Mỗi khối 128-bit được mã hóa qua nhiều vòng biến đổi.</p>
+      </div>
+      <div class="card about-card">
+        <h3>🔄 Các bước trong mỗi vòng</h3>
+        <ul>
+          <li><strong>SubBytes</strong> — Thay thế phi tuyến qua S-Box</li>
+          <li><strong>ShiftRows</strong> — Dịch vòng từng hàng</li>
+          <li><strong>MixColumns</strong> — Trộn cột (khuếch tán)</li>
+          <li><strong>AddRoundKey</strong> — XOR với round key</li>
+        </ul>
+      </div>
+      <div class="card about-card">
+        <h3>🛡️ So sánh chế độ</h3>
+        <table class="mode-table">
+          <tr><th>Chế độ</th><th>An toàn</th><th>Cần IV/Nonce</th><th>Padding</th></tr>
+          <tr><td>ECB</td><td class="bad">❌ Không</td><td>Không</td><td>Có</td></tr>
+          <tr><td>CBC</td><td class="good">✅ Có</td><td>IV 16B</td><td>Có</td></tr>
+          <tr><td>CTR</td><td class="good">✅ Có</td><td>Nonce 8B</td><td>Không</td></tr>
+        </table>
+      </div>
+      <div class="card about-card">
+        <h3>🔑 Số vòng theo độ dài khóa</h3>
+        <div class="key-info-grid">
+          <div class="key-info-item"><span class="ki-bits">128</span><span class="ki-label">bit</span><span class="ki-rounds">10 vòng</span></div>
+          <div class="key-info-item"><span class="ki-bits">192</span><span class="ki-label">bit</span><span class="ki-rounds">12 vòng</span></div>
+          <div class="key-info-item"><span class="ki-bits">256</span><span class="ki-label">bit</span><span class="ki-rounds">14 vòng</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Toast thông báo -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
