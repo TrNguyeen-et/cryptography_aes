@@ -68,7 +68,7 @@ def _collect_encrypt_steps(plaintext_block: bytes, key: bytes) -> dict:
         details = [{"pos": i, "in": old_state[i], "out": state[i]} for i in range(16)]
         steps.append({'name': 'SubBytes', 'state': state[:], 'old_state': old_state[:], 'details': details})
 
-        # 2. ShiftRows (Đã chuẩn hóa index theo hàng)
+        # 2. ShiftRows (Chuẩn Column-Major)
         old_state = state[:]; state = shift_rows(state)
         details = [
             {"row": 0, "shift": 0, "desc": "Không dịch", "before": [old_state[i] for i in [0,4,8,12]], "after": [state[i] for i in [0,4,8,12]]},

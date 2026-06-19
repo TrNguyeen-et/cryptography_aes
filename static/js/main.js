@@ -87,8 +87,7 @@ function renderStateGrid(stateArr) {
   const grid = document.createElement('div'); 
   grid.className = 'state-grid';
   
-  // Mảng chỉ số theo Column-Major chuẩn của AES
-  // Cột 0 (0,1,2,3), Cột 1 (4,5,6,7), Cột 2 (8,9,10,11), Cột 3 (12,13,14,15)
+  // Chuyển đổi hiển thị từ mảng 1 chiều sang ma trận 4x4 theo CỘT (Column-Major)
   const colMajorIndices = [
     0, 4, 8, 12,   // Hàng 0
     1, 5, 9, 13,   // Hàng 1
@@ -120,33 +119,28 @@ function renderSboxTable(inputs, isInverse = false) {
   const tableData = isInverse ? ISBOX : SBOX;
   const tableName = isInverse ? "Inverse S-Box" : "S-Box";
   
-  // Header góc trên cùng bên trái
   const emptyCorner = document.createElement('div'); emptyCorner.className = 'sbox-header'; emptyCorner.textContent = tableName; grid.appendChild(emptyCorner);
-  
-  // Header cột (0-F)
   for (let col = 0; col < 16; col++) { 
     const h = document.createElement('div'); h.className = 'sbox-header'; h.textContent = col.toString(16).toUpperCase(); grid.appendChild(h); 
   }
 
-  // Duyệt từng ô để điền giá trị và highlight
   for (let row = 0; row < 16; row++) {
-    // Header hàng (0-F)
     const rowHeader = document.createElement('div'); 
     rowHeader.className = 'sbox-header'; 
     rowHeader.textContent = row.toString(16).toUpperCase(); 
     grid.appendChild(rowHeader);
     
     for (let col = 0; col < 16; col++) {
-      // Tọa độ của ô trong bảng chính là giá trị đầu vào (Input)
+      // Tọa độ ô chính là giá trị đầu vào
       const inputVal = row * 16 + col;
-      // Giá trị hiển thị bên trong ô là đầu ra (Output)
+      // Giá trị bên trong ô là đầu ra
       const outputVal = tableData[inputVal];
       
       const cell = document.createElement('div'); 
       cell.className = 'sbox-cell'; 
       cell.textContent = byteToHex(outputVal);
       
-      // Chỉ highlight nếu TỌA ĐỘ ô (inputVal) nằm trong mảng inputs
+      // Highlight ô có TỌA ĐỘ bằng với đầu vào
       if (inputs.includes(inputVal)) {
         cell.classList.add('sbox-highlight');
       }
