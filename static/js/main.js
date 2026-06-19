@@ -84,8 +84,25 @@ async function genKey(inputId, bitsSelectId) {
 function byteToHex(b) { return (b ?? 0).toString(16).toUpperCase().padStart(2, '0'); }
 
 function renderStateGrid(stateArr) {
-  const grid = document.createElement('div'); grid.className = 'state-grid';
-  for (let i = 0; i < 16; i++) { const cell = document.createElement('div'); cell.className = 'state-cell'; cell.textContent = byteToHex(stateArr[i]); grid.appendChild(cell); }
+  const grid = document.createElement('div'); 
+  grid.className = 'state-grid';
+  
+  // Mảng chỉ số theo Column-Major chuẩn của AES
+  // Cột 0 (0,1,2,3), Cột 1 (4,5,6,7), Cột 2 (8,9,10,11), Cột 3 (12,13,14,15)
+  const colMajorIndices = [
+    0, 4, 8, 12,   // Hàng 0
+    1, 5, 9, 13,   // Hàng 1
+    2, 6, 10, 14,  // Hàng 2
+    3, 7, 11, 15   // Hàng 3
+  ];
+  
+  for (let i = 0; i < 16; i++) { 
+    const idx = colMajorIndices[i];
+    const cell = document.createElement('div'); 
+    cell.className = 'state-cell'; 
+    cell.textContent = byteToHex(stateArr[idx]); 
+    grid.appendChild(cell); 
+  }
   return grid;
 }
 
