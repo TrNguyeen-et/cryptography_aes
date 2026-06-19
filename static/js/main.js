@@ -114,22 +114,42 @@ const STEP_CLASS = {
 };
 
 // MỚI: Tạo bảng S-Box 16x16 với highlight
-function renderSboxTable(inputs) {
+function renderSboxTable(inputs, isInverse = false) {
   const container = document.createElement('div'); container.className = 'sbox-grid-container';
   const grid = document.createElement('div'); grid.className = 'sbox-table';
+  const tableData = isInverse ? ISBOX : SBOX;
+  const tableName = isInverse ? "Inverse S-Box" : "S-Box";
   
-  // Header row (y-axis: 0-F)
-  const emptyCorner = document.createElement('div'); emptyCorner.className = 'sbox-header'; grid.appendChild(emptyCorner);
-  for (let col = 0; col < 16; col++) { const h = document.createElement('div'); h.className = 'sbox-header'; h.textContent = col.toString(16).toUpperCase(); grid.appendChild(h); }
+  // Header góc trên cùng bên trái
+  const emptyCorner = document.createElement('div'); emptyCorner.className = 'sbox-header'; emptyCorner.textContent = tableName; grid.appendChild(emptyCorner);
+  
+  // Header cột (0-F)
+  for (let col = 0; col < 16; col++) { 
+    const h = document.createElement('div'); h.className = 'sbox-header'; h.textContent = col.toString(16).toUpperCase(); grid.appendChild(h); 
+  }
 
-  // Data rows (x-axis: 0-F)
+  // Duyệt từng ô để điền giá trị và highlight
   for (let row = 0; row < 16; row++) {
-    const rowHeader = document.createElement('div'); rowHeader.className = 'sbox-header'; rowHeader.textContent = row.toString(16).toUpperCase(); grid.appendChild(rowHeader);
+    // Header hàng (0-F)
+    const rowHeader = document.createElement('div'); 
+    rowHeader.className = 'sbox-header'; 
+    rowHeader.textContent = row.toString(16).toUpperCase(); 
+    grid.appendChild(rowHeader);
+    
     for (let col = 0; col < 16; col++) {
-      const val = SBOX[row * 16 + col];
-      const cell = document.createElement('div'); cell.className = 'sbox-cell'; cell.textContent = byteToHex(val);
-      // Nếu giá trị này nằm trong mảng input, highlight nó
-      if (inputs.includes(val)) cell.classList.add('sbox-highlight');
+      // Tọa độ của ô trong bảng chính là giá trị đầu vào (Input)
+      const inputVal = row * 16 + col;
+      // Giá trị hiển thị bên trong ô là đầu ra (Output)
+      const outputVal = tableData[inputVal];
+      
+      const cell = document.createElement('div'); 
+      cell.className = 'sbox-cell'; 
+      cell.textContent = byteToHex(outputVal);
+      
+      // Chỉ highlight nếu TỌA ĐỘ ô (inputVal) nằm trong mảng inputs
+      if (inputs.includes(inputVal)) {
+        cell.classList.add('sbox-highlight');
+      }
       grid.appendChild(cell);
     }
   }
