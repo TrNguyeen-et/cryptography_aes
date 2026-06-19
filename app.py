@@ -79,28 +79,63 @@ def _collect_encrypt_steps(plaintext_block: bytes, key: bytes) -> dict:
 
 def _collect_decrypt_steps(ciphertext_block: bytes, key: bytes) -> dict:
     round_keys = key_expansion(key); Nr = len(round_keys) - 1; state = list(ciphertext_block); rounds = []
+    
+    # Vòng cuối (Initial AddRoundKey với khóa cuối)
     old_state = state[:]; state = add_round_key(state, round_keys[Nr])
     details = [{"pos": i, "state": old_state[i], "key": round_keys[Nr][i], "result": state[i]} for i in range(16)]
     rounds.append({'round': Nr, 'label': f'Initial AddRoundKey (RK{Nr})', 'steps': [{'name': 'AddRoundKey', 'state': state[:], 'old_state': old_state[:], 'key': round_keys[Nr][:], 'details': details}]})
+
+    # Các vòng ngược từ Nr-1 xuống 1
     for r in range(Nr - 1, 0, -1):
         steps = []
-        old_state = state[:]; state = inv_shift_rows(state); details = [{"row": i, "shift": i, "desc": f"Dịch phải {i}", "before": [], "after": []} for i in range(4)]
+        # InvShiftRows (Đã sửa điền đầy đủ mảng before/after)
+        old_state = state[:]
+        state = inv_shift_rows(state)
+        details = [
+            {"row": 0, "shift": 0, "desc": "Không dịch", "before": [old_state[i] for i in [0,4,8,12]], "after": [state[i] for i in [0,4,8,12]]},
+            {"row": 1, "shift": 1, "desc": "Dịch phải 1", "before": [old_state[i] for i in [1,5,9,13]], "after": [state[i] for i in [1,5,9,13]]},
+            {"row": 2, "shift": 2, "desc": "Dịch phải 2", "before": [old_state[i] for i in [2,6,10,14]], "after": [state[i] for i in [2,6,10,14]]},
+            {"row": 3, "shift": 3, "desc": "Dịch phải 3", "before": [old_state[i] for i in [3,7,11,15]], "after": [state[i] for i in [3,7,11,15]]}
+        ]
         steps.append({'name': 'InvShiftRows', 'state': state[:], 'old_state': old_state[:], 'details': details})
+
+        # InvSubBytes
         old_state = state[:]; state = inv_sub_bytes(state); details = [{"pos": i, "in": old_state[i], "out": state[i]} for i in range(16)]
         steps.append({'name': 'InvSubBytes', 'state': state[:], 'old_state': old_state[:], 'details': details})
+
+        # AddRoundKey
         old_state = state[:]; state = add_round_key(state, round_keys[r]); details = [{"pos": i, "state": old_state[i], "key": round_keys[r][i], "result": state[i]} for i in range(16)]
         steps.append({'name': 'AddRoundKey', 'state': state[:], 'old_state': old_state[:], 'key': round_keys[r][:], 'details': details})
+
+        # InvMixColumns
         old_state = state[:]; state = inv_mix_columns(state); details = [{"col": i, "input": old_state[i*4:(i+1)*4], "output": state[i*4:(i+1)*4]} for i in range(4)]
         steps.append({'name': 'InvMixColumns', 'state': state[:], 'old_state': old_state[:], 'details': details})
+        
         rounds.append({'round': r, 'label': f'Round {r} (inverse)', 'steps': steps})
+
+    # Vòng 0 (Final Round 0 - inverse)
     steps = []
-    old_state = state[:]; state = inv_shift_rows(state); details = [{"row": i, "shift": i, "desc": f"Dịch phải {i}", "before": [], "after": []} for i in range(4)]
+    # InvShiftRows (Đã sửa điền đầy đủ mảng before/after)
+    old_state = state[:]
+    state = inv_shift_rows(state)
+    details = [
+        {"row": 0, "shift": 0, "desc": "Không dịch", "before": [old_state[i] for i in [0,4,8,12]], "after": [state[i] for i in [0,4,8,12]]},
+        {"row": 1, "shift": 1, "desc": "Dịch phải 1", "before": [old_state[i] for i in [1,5,9,13]], "after": [state[i] for i in [1,5,9,13]]},
+        {"row": 2, "shift": 2, "desc": "Dịch phải 2", "before": [old_state[i] for i in [2,6,10,14]], "after": [state[i] for i in [2,6,10,14]]},
+        {"row": 3, "shift": 3, "desc": "Dịch phải 3", "before": [old_state[i] for i in [3,7,11,15]], "after": [state[i] for i in [3,7,11,15]]}
+    ]
     steps.append({'name': 'InvShiftRows', 'state': state[:], 'old_state': old_state[:], 'details': details})
+
+    # InvSubBytes
     old_state = state[:]; state = inv_sub_bytes(state); details = [{"pos": i, "in": old_state[i], "out": state[i]} for i in range(16)]
     steps.append({'name': 'InvSubBytes', 'state': state[:], 'old_state': old_state[:], 'details': details})
+
+    # AddRoundKey
     old_state = state[:]; state = add_round_key(state, round_keys[0]); details = [{"pos": i, "state": old_state[i], "key": round_keys[0][i], "result": state[i]} for i in range(16)]
     steps.append({'name': 'AddRoundKey', 'state': state[:], 'old_state': old_state[:], 'key': round_keys[0][:], 'details': details})
+    
     rounds.append({'round': 0, 'label': 'Final Round 0 (inverse)', 'steps': steps})
+
     return {'Nr': Nr, 'key_bits': len(key) * 8, 'ciphertext': list(ciphertext_block), 'plaintext': state, 'round_keys': [rk[:] for rk in round_keys], 'rounds': rounds}
 
 def _parse_hex_field(value: str, name: str, expected_len: int = None) -> bytes:
