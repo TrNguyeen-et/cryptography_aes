@@ -120,7 +120,7 @@ def api_encrypt():
         # Bắt đầu mã hóa
         if mode == 'ECB':
             ct = ecb_encrypt(pt, key); result = {'ciphertext_hex': ct.hex().upper(), 'ciphertext_b64': base64.b64encode(ct).decode()}
-            # ĐÃ SỬA: Luôn lấy block đầu tiên để trực quan hóa, không giới hạn len(pt) <= 16
+        
             if verbose:
                 block = pkcs7_pad(pt)[:16]
                 result['verbose'] = _collect_encrypt_steps(block, key)
@@ -128,7 +128,7 @@ def api_encrypt():
         elif mode == 'CBC':
             iv_ascii = data.get('iv_ascii', '').strip(); iv = generate_random_iv() if not iv_ascii else _pad_ascii_to_length(iv_ascii, 16)
             ct = cbc_encrypt(pt, key, iv); result = {'ciphertext_hex': ct.hex().upper(), 'ciphertext_b64': base64.b64encode(ct).decode(), 'iv_hex': iv.hex().upper(), 'iv_generated': not iv_ascii}
-            # ĐÃ SỬA: Luôn lấy block đầu tiên để trực quan hóa
+           
             if verbose:
                 block = bytes([p ^ i for p, i in zip(pkcs7_pad(pt)[:16], iv)])
                 result['verbose'] = _collect_encrypt_steps(block, key)
@@ -146,7 +146,7 @@ def api_decrypt():
         
         if mode == 'ECB':
             pt = ecb_decrypt(ct, key); result = {'plaintext_hex': pt.hex().upper(), 'plaintext_ascii': pt.decode('utf-8', errors='replace')}
-            # ĐÃ SỬA: Lấy block đầu tiên của ciphertext để trực quan hóa giải mã
+            
             if verbose and len(ct) >= 16:
                 result['verbose'] = _collect_decrypt_steps(ct[:16], key)
                 

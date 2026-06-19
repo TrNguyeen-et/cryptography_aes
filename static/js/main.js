@@ -281,19 +281,57 @@ async function doEncrypt() {
   const ptRaw = val('enc-pt'); const ptFmt = val('enc-pt-fmt') || document.getElementById('enc-pt-fmt')?.value || 'ascii';
   const keyAscii = val('enc-key'); const keyBits = document.getElementById('enc-key-bits')?.value || '128';
   const mode = getActiveMode('#tab-encrypt .mode-tabs'); const ivAscii = val('enc-iv'); const verbose = document.getElementById('enc-verbose')?.checked;
+  
   if (!ptRaw || !keyAscii) { showError('tab-encrypt', 'Vui lòng nhập Plaintext và Key.'); return; }
-  let ptHex; try { ptHex = ptFmt === 'ascii' ? asciiToHex(ptRaw) : ptRaw.replace(/\s/g,''); if (!/^[0-9a-fA-F]*$/.test(ptHex)) throw new Error(); } catch { showError('tab-encrypt', 'Plaintext không hợp lệ.'); return; }
+  
+  let ptHex; 
+  try { 
+    ptHex = ptFmt === 'ascii' ? asciiToHex(ptRaw) : ptRaw.replace(/\s/g,''); 
+    if (!/^[0-9a-fA-F]*$/.test(ptHex)) throw new Error(); 
+  } catch { 
+    showError('tab-encrypt', 'Plaintext không hợp lệ.'); return; 
+  }
+  
   const body = { plaintext_hex: ptHex, key_ascii: keyAscii, key_bits: keyBits, mode, verbose };
   if (mode === 'CBC') body.iv_ascii = ivAscii;
+  
   try {
-    const res = await fetch('/api/encrypt', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }); const data = await res.json();
+    const res = await fetch('/api/encrypt', { 
+      method: 'POST', 
+      headers: {'Content-Type':'application/json'}, 
+      body: JSON.stringify(body) 
+    }); 
+    const data = await res.json();
+    
     if (data.error) { showError('tab-encrypt', data.error); return; }
-    document.getElementById('enc-out-hex').textContent = data.ciphertext_hex; document.getElementById('enc-out-b64').textContent = data.ciphertext_b64;
+    
+    document.getElementById('enc-out-hex').textContent = data.ciphertext_hex; 
+    document.getElementById('enc-out-b64').textContent = data.ciphertext_b64;
+    
+    // SỬA LỖI HIỂN THỊ IV Ở ĐÂY
     const ivRow = document.getElementById('enc-iv-result-row');
-    if (data.iv_hex) { document.getElementById('enc-out-iv').textContent = data.iv_hex; ivRow.style.display = 'flex'; if (data.iv_generated) showToast('⚠️ IV tự sinh! Copy lại để giải mã.', 4000); } else { ivRow.style.display = 'none'; }
-    show('enc-result-content'); hide('enc-result-empty');
-    if (data.verbose) { show('verbose-section'); renderVerbose(data.verbose, 'round-keys-bar', 'rounds-container', 'verbose-meta'); } else { hide('verbose-section'); }
-  } catch (e) { showError('tab-encrypt', 'Lỗi server: ' + e.message); }
+    if (mode === 'CBC' && data.iv_hex) {
+      document.getElementById('enc-out-iv').textContent = data.iv_hex;
+      ivRow.style.display = 'flex'; // Hiện ô IV ra để copy
+      if (data.iv_generated) {
+        showToast('⚠️ IV đã tự sinh ngẫu nhiên! Hãy copy lại để giải mã.', 4000);
+      }
+    } else {
+      ivRow.style.display = 'none'; // Ẩn ô IV nếu là ECB
+    }
+    
+    show('enc-result-content'); 
+    hide('enc-result-empty');
+    
+    if (data.verbose) { 
+      show('verbose-section'); 
+      renderVerbose(data.verbose, 'round-keys-bar', 'rounds-container', 'verbose-meta'); 
+    } else { 
+      hide('verbose-section'); 
+    }
+  } catch (e) { 
+    showError('tab-encrypt', 'Lỗi server: ' + e.message); 
+  }
 }
 
 async function doDecrypt() {
