@@ -197,6 +197,7 @@ def api_encrypt():
             iv = generate_random_iv() if not iv_ascii else _pad_ascii_to_length(iv_ascii, 16)
             ct = cbc_encrypt(pt, key, iv)
             result = {'ciphertext_hex': ct.hex().upper(), 'ciphertext_b64': base64.b64encode(ct).decode(), 'iv_hex': iv.hex().upper(), 'iv_generated': not iv_ascii}
+            
             if verbose:
                 result['verbose'] = []
                 padded_pt = pkcs7_pad(pt)
@@ -204,7 +205,26 @@ def api_encrypt():
                 for i in range(0, len(padded_pt), 16):
                     block = padded_pt[i:i+16]
                     xored = bytes([p ^ c for p, c in zip(block, prev)])
-                    result['verbose'].append(_collect_encrypt_steps(xored, key))
+                    
+                    # Lấy chi tiết các bước AES của khối đã XOR
+                    verbose_data = _collect_encrypt_steps(xored, key)
+                    
+                    # Chèn bước XOR của CBC lên đầu danh sách các vòng (Round)
+                    xor_label = "IV (Khởi tạo)" if i == 0 else f"Khối mã trước đó (Block {i//16 - 1})"
+                    cbc_xor_step = {
+                        'round': 'CBC',
+                        'label': f'XOR Plaintext với {xor_label}',
+                        'steps': [{
+                            'name': 'CBC_XOR',
+                            'old_state': list(block),
+                            'key': list(prev),
+                            'state': list(xored),
+                            'details': [{"pos": j, "state": block[j], "key": prev[j], "result": xored[j]} for j in range(16)]
+                        }]
+                    }
+                    verbose_data['rounds'].insert(0, cbc_xor_step)
+                    
+                    result['verbose'].append(verbose_data)
                     prev = ct[i:i+16]
         else: 
             return jsonify({'error': 'Mode khong hop le'}), 400

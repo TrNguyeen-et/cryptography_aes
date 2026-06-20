@@ -142,6 +142,7 @@ const STEP_CLASS = {
   'ShiftRows'    : 'step-sr', 'InvShiftRows' : 'step-sr',
   'MixColumns'   : 'step-mc', 'InvMixColumns': 'step-mc',
   'AddRoundKey'  : 'step-ark',
+  'CBC_XOR'      : 'step-ark' 
 };
 
 function renderDetailTable(stepData) {
@@ -159,7 +160,6 @@ function renderDetailTable(stepData) {
     wrapper.appendChild(renderSboxTable(inputs, isInv));
   } else if (name.includes('ShiftRows') || name.includes('InvShiftRows')) {
     let html = '<table><tr><th>Hàng</th><th>Phép dịch</th><th>Trước</th><th>Sau</th></tr>';
-    // Dữ liệu từ Backend giờ đã là mảng 4x4 chuẩn, chỉ việc join lại
     details.forEach(d => { 
       html += `<tr><td>Hàng ${d.row}</td><td>${d.desc}</td><td>${d.before.map(b => byteToHex(b)).join(' ')}</td><td class="highlight">${d.after.map(b => byteToHex(b)).join(' ')}</td></tr>`; 
     });
@@ -194,8 +194,8 @@ function renderDetailTable(stepData) {
     html += '</div>';
     tableContainer.innerHTML = html; 
     wrapper.appendChild(tableContainer);
-  } else if (name.includes('AddRoundKey')) {
-    let html = '<table><tr><th>Vị trí</th><th>State</th><th>XOR</th><th>Round Key</th><th>Kết quả</th></tr>';
+  } else if (name.includes('AddRoundKey') || name === 'CBC_XOR') {
+    let html = '<table><tr><th>Vị trí</th><th>Dữ liệu 1</th><th>XOR</th><th>Dữ liệu 2</th><th>Kết quả</th></tr>';
     details.forEach(d => { html += `<tr><td>${d.pos}</td><td>${byteToHex(d.state)}</td><td>⊕</td><td>${byteToHex(d.key)}</td><td class="highlight">${byteToHex(d.result)}</td></tr>`; });
     tableContainer.innerHTML = html + '</table>'; wrapper.appendChild(tableContainer);
   }
@@ -210,16 +210,49 @@ function renderStep(stepData) {
   div.appendChild(header);
 
   const gridsRow = document.createElement('div'); gridsRow.className = 'step-grids-row';
-  if (stepData.name.includes('AddRoundKey') && stepData.key) {
-    const stateWrap = document.createElement('div'); stateWrap.className = 'grid-label-wrap'; stateWrap.innerHTML = '<span class="grid-tag">State</span>'; stateWrap.appendChild(renderStateGrid(stepData.old_state)); gridsRow.appendChild(stateWrap);
+  
+  // Xử lý hiển thị lưới cho AddRoundKey và CBC_XOR
+  if ((stepData.name.includes('AddRoundKey') || stepData.name === 'CBC_XOR') && stepData.key) {
+    const label1 = stepData.name === 'CBC_XOR' ? 'Plaintext' : 'State';
+    const label2 = stepData.name === 'CBC_XOR' ? 'IV / C_prev' : 'Round Key';
+    
+    const stateWrap = document.createElement('div'); 
+    stateWrap.className = 'grid-label-wrap'; 
+    stateWrap.innerHTML = `<span class="grid-tag">${label1}</span>`; 
+    stateWrap.appendChild(renderStateGrid(stepData.old_state)); 
+    gridsRow.appendChild(stateWrap);
+    
     const op1 = document.createElement('div'); op1.className = 'grid-op'; op1.textContent = '⊕'; gridsRow.appendChild(op1);
-    const keyWrap = document.createElement('div'); keyWrap.className = 'grid-label-wrap'; keyWrap.innerHTML = '<span class="grid-tag">Round Key</span>'; keyWrap.appendChild(renderStateGrid(stepData.key)); gridsRow.appendChild(keyWrap);
+    
+    const keyWrap = document.createElement('div'); 
+    keyWrap.className = 'grid-label-wrap'; 
+    keyWrap.innerHTML = `<span class="grid-tag">${label2}</span>`; 
+    keyWrap.appendChild(renderStateGrid(stepData.key)); 
+    gridsRow.appendChild(keyWrap);
+    
     const op2 = document.createElement('div'); op2.className = 'grid-op'; op2.textContent = '='; gridsRow.appendChild(op2);
-    const resWrap = document.createElement('div'); resWrap.className = 'grid-label-wrap'; resWrap.innerHTML = '<span class="grid-tag">Kết quả</span>'; resWrap.appendChild(renderStateGrid(stepData.state)); gridsRow.appendChild(resWrap);
-  } else if (stepData.old_state) {
-    const beforeWrap = document.createElement('div'); beforeWrap.className = 'grid-label-wrap'; beforeWrap.innerHTML = '<span class="grid-tag">Trước</span>'; beforeWrap.appendChild(renderStateGrid(stepData.old_state)); gridsRow.appendChild(beforeWrap);
+    
+    const resWrap = document.createElement('div'); 
+    resWrap.className = 'grid-label-wrap'; 
+    resWrap.innerHTML = '<span class="grid-tag">Kết quả</span>'; 
+    resWrap.appendChild(renderStateGrid(stepData.state)); 
+    gridsRow.appendChild(resWrap);
+  } 
+  // Xử lý hiển thị lưới cho các bước còn lại (SubBytes, ShiftRows, MixColumns)
+  else if (stepData.old_state) {
+    const beforeWrap = document.createElement('div'); 
+    beforeWrap.className = 'grid-label-wrap'; 
+    beforeWrap.innerHTML = '<span class="grid-tag">Trước</span>'; 
+    beforeWrap.appendChild(renderStateGrid(stepData.old_state)); 
+    gridsRow.appendChild(beforeWrap);
+    
     const arrow = document.createElement('div'); arrow.className = 'grid-arrow'; arrow.textContent = '→'; gridsRow.appendChild(arrow);
-    const afterWrap = document.createElement('div'); afterWrap.className = 'grid-label-wrap'; afterWrap.innerHTML = '<span class="grid-tag">Sau</span>'; afterWrap.appendChild(renderStateGrid(stepData.state)); gridsRow.appendChild(afterWrap);
+    
+    const afterWrap = document.createElement('div'); 
+    afterWrap.className = 'grid-label-wrap'; 
+    afterWrap.innerHTML = '<span class="grid-tag">Sau</span>'; 
+    afterWrap.appendChild(renderStateGrid(stepData.state)); 
+    gridsRow.appendChild(afterWrap);
   }
   div.appendChild(gridsRow);
 
