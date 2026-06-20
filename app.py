@@ -182,14 +182,32 @@ def api_encrypt():
         pt  = _parse_hex_field(data.get('plaintext_hex', ''), 'plaintext_hex')
         key_ascii = data.get('key_ascii', ''); key_bits = int(data.get('key_bits', 128)); key = _pad_ascii_to_length(key_ascii, key_bits // 8)
         mode = data.get('mode', 'ECB').upper(); verbose = bool(data.get('verbose', False))
+        
         if mode == 'ECB':
-            ct = ecb_encrypt(pt, key); result = {'ciphertext_hex': ct.hex().upper(), 'ciphertext_b64': base64.b64encode(ct).decode()}
-            if verbose: result['verbose'] = _collect_encrypt_steps(pkcs7_pad(pt)[:16], key)
+            ct = ecb_encrypt(pt, key)
+            result = {'ciphertext_hex': ct.hex().upper(), 'ciphertext_b64': base64.b64encode(ct).decode()}
+            if verbose:
+                result['verbose'] = []
+                padded_pt = pkcs7_pad(pt)
+                for i in range(0, len(padded_pt), 16):
+                    result['verbose'].append(_collect_encrypt_steps(padded_pt[i:i+16], key))
+                    
         elif mode == 'CBC':
-            iv_ascii = data.get('iv_ascii', '').strip(); iv = generate_random_iv() if not iv_ascii else _pad_ascii_to_length(iv_ascii, 16)
-            ct = cbc_encrypt(pt, key, iv); result = {'ciphertext_hex': ct.hex().upper(), 'ciphertext_b64': base64.b64encode(ct).decode(), 'iv_hex': iv.hex().upper(), 'iv_generated': not iv_ascii}
-            if verbose: result['verbose'] = _collect_encrypt_steps(bytes([p ^ i for p, i in zip(pkcs7_pad(pt)[:16], iv)]), key)
-        else: return jsonify({'error': 'Mode khong hop le'}), 400
+            iv_ascii = data.get('iv_ascii', '').strip()
+            iv = generate_random_iv() if not iv_ascii else _pad_ascii_to_length(iv_ascii, 16)
+            ct = cbc_encrypt(pt, key, iv)
+            result = {'ciphertext_hex': ct.hex().upper(), 'ciphertext_b64': base64.b64encode(ct).decode(), 'iv_hex': iv.hex().upper(), 'iv_generated': not iv_ascii}
+            if verbose:
+                result['verbose'] = []
+                padded_pt = pkcs7_pad(pt)
+                prev = iv
+                for i in range(0, len(padded_pt), 16):
+                    block = padded_pt[i:i+16]
+                    xored = bytes([p ^ c for p, c in zip(block, prev)])
+                    result['verbose'].append(_collect_encrypt_steps(xored, key))
+                    prev = ct[i:i+16]
+        else: 
+            return jsonify({'error': 'Mode khong hop le'}), 400
         return jsonify(result)
     except Exception as e: return jsonify({'error': str(e)}), 400
 
@@ -200,16 +218,26 @@ def api_decrypt():
         ct  = _parse_hex_field(data.get('ciphertext_hex', ''), 'ciphertext_hex')
         key_ascii = data.get('key_ascii', ''); key_bits = int(data.get('key_bits', 128)); key = _pad_ascii_to_length(key_ascii, key_bits // 8)
         mode = data.get('mode', 'ECB').upper(); verbose = bool(data.get('verbose', False))
+        
         if mode == 'ECB':
-            pt = ecb_decrypt(ct, key); result = {'plaintext_hex': pt.hex().upper(), 'plaintext_ascii': pt.decode('utf-8', errors='replace')}
-            if verbose and len(ct) >= 16: result['verbose'] = _collect_decrypt_steps(ct[:16], key)
+            pt = ecb_decrypt(ct, key)
+            result = {'plaintext_hex': pt.hex().upper(), 'plaintext_ascii': pt.decode('utf-8', errors='replace')}
+            if verbose and len(ct) >= 16:
+                result['verbose'] = []
+                for i in range(0, len(ct), 16):
+                    result['verbose'].append(_collect_decrypt_steps(ct[i:i+16], key))
+                    
         elif mode == 'CBC':
             iv_hex_raw = data.get('iv_hex', '').strip(); iv_ascii = data.get('iv_ascii', '').strip()
             if iv_hex_raw: iv = _parse_hex_field(iv_hex_raw, 'iv_hex', 16)
             elif iv_ascii: iv = _pad_ascii_to_length(iv_ascii, 16)
             else: return jsonify({'error': 'CBC cần IV'}), 400
-            pt = cbc_decrypt(ct, key, iv); result = {'plaintext_hex': pt.hex().upper(), 'plaintext_ascii': pt.decode('utf-8', errors='replace')}
-            if verbose and len(ct) >= 16: result['verbose'] = _collect_decrypt_steps(ct[:16], key)
+            pt = cbc_decrypt(ct, key, iv)
+            result = {'plaintext_hex': pt.hex().upper(), 'plaintext_ascii': pt.decode('utf-8', errors='replace')}
+            if verbose and len(ct) >= 16:
+                result['verbose'] = []
+                for i in range(0, len(ct), 16):
+                    result['verbose'].append(_collect_decrypt_steps(ct[i:i+16], key))
         else: return jsonify({'error': 'Mode khong hop le'}), 400
         return jsonify(result)
     except Exception as e: return jsonify({'error': str(e)}), 400

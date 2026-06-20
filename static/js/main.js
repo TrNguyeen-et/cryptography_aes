@@ -233,22 +233,49 @@ function renderStep(stepData) {
   return div;
 }
 
-function renderVerbose(verboseData, keysBarId, roundsId, metaId) {
+function renderVerbose(verboseDataArray, keysBarId, roundsId, metaId) {
   const metaEl = document.getElementById(metaId);
-  if (metaEl) metaEl.textContent = `AES-${verboseData.key_bits}  |  ${verboseData.Nr} vòng  |  PT: ${verboseData.plaintext?.map(b=>byteToHex(b)).join(' ')}`;
+  if (metaEl) metaEl.textContent = `Tổng số khối (Blocks): ${verboseDataArray.length}`;
+  
   const keysBar = document.getElementById(keysBarId);
   if (keysBar) {
     keysBar.innerHTML = '<span style="font-size:.72rem;color:var(--text3);margin-right:8px">RKs:</span>';
-    verboseData.round_keys.forEach((rk, i) => { const chip = document.createElement('div'); chip.className = 'rk-chip'; chip.title = rk.map(b => byteToHex(b)).join(' '); chip.textContent = `RK${i}`; keysBar.appendChild(chip); });
+    verboseDataArray[0].round_keys.forEach((rk, i) => { 
+      const chip = document.createElement('div'); 
+      chip.className = 'rk-chip'; 
+      chip.title = rk.map(b => byteToHex(b)).join(' '); 
+      chip.textContent = `RK${i}`; 
+      keysBar.appendChild(chip); 
+    });
   }
-  const container = document.getElementById(roundsId); if (!container) return; container.innerHTML = '';
-  verboseData.rounds.forEach((round, idx) => {
-    const block = document.createElement('div'); block.className = 'round-block' + (idx === 0 ? ' open' : '');
-    const header = document.createElement('div'); header.className = 'round-header';
-    header.innerHTML = `<span class="round-badge">Vòng ${round.round}</span><span class="round-label">${round.label}</span><span class="round-toggle">▼</span>`;
-    header.addEventListener('click', () => block.classList.toggle('open')); block.appendChild(header);
-    const steps = document.createElement('div'); steps.className = 'round-steps';
-    round.steps.forEach(s => steps.appendChild(renderStep(s))); block.appendChild(steps); container.appendChild(block);
+  
+  const container = document.getElementById(roundsId); 
+  if (!container) return; 
+  container.innerHTML = '';
+
+  verboseDataArray.forEach((verboseData, blockIdx) => {
+    // Thêm tiêu đề phân cách từng Khối
+    const blockTitle = document.createElement('h3');
+    blockTitle.style.cssText = 'width:100%; text-align:center; margin:20px 0 10px 0; color:var(--accent); font-size:1rem; border-top:2px dashed var(--border); padding-top:15px;';
+    blockTitle.textContent = `--- Khối ${blockIdx} (Block ${blockIdx}) ---`;
+    container.appendChild(blockTitle);
+
+    verboseData.rounds.forEach((round, idx) => {
+      const block = document.createElement('div'); 
+      block.className = 'round-block' + (idx === 0 && blockIdx === 0 ? ' open' : '');
+      
+      const header = document.createElement('div'); 
+      header.className = 'round-header';
+      header.innerHTML = `<span class="round-badge">Vòng ${round.round}</span><span class="round-label">${round.label}</span><span class="round-toggle">▼</span>`;
+      header.addEventListener('click', () => block.classList.toggle('open')); 
+      block.appendChild(header);
+      
+      const steps = document.createElement('div'); 
+      steps.className = 'round-steps';
+      round.steps.forEach(s => steps.appendChild(renderStep(s))); 
+      block.appendChild(steps); 
+      container.appendChild(block);
+    });
   });
 }
 
